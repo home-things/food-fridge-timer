@@ -3,13 +3,23 @@
 
 //                rs  en  d0 d1 d2 d3
 LiquidCrystal lcd(12, 13, 4, 5, 6, 7);
+
+//
+// pins
 #define PERIOD_PIN A1
 #define VIBRO_PIN 9
+
+//
+// consts
+#define MAX_PERIOD 5
+
 unsigned prevPeriod = 0;
 unsigned minPeriod = 2, periodSteps = 4; // 1, 2, 3, 4, 5
+unsigned scaleLen = 5;
 
+//
+// sumbols
 
-// Creat a set of new characters
 byte smiley[8] = {
   0b00000,
   0b00000,
@@ -21,15 +31,28 @@ byte smiley[8] = {
   0b00000
 };
 
-byte armsUp[8] = {
-  0b00100,
-  0b01010,
-  0b00100,
-  0b10101,
-  0b01110,
-  0b00100,
-  0b00100,
-  0b01010
+// a bar
+byte fullbar[8] = {
+  0b11111,
+  0b11111,
+  0b11111,
+  0b11111,
+  0b11111,
+  0b11111,
+  0b11111,
+  0b11111
+};
+
+// track
+byte newbar[8] = {
+ 0b01001,
+ 0b10010,
+ 0b00100,
+ 0b01001,
+ 0b10010,
+ 0b00100,
+ 0b01001,
+ 0b10010,
 };
 
 byte frownie[8] = {
@@ -43,6 +66,22 @@ byte frownie[8] = {
   0b10001
 };
 
+void printScale (unsigned period, unsigned len) {
+  lcd.setCursor(0, 1);
+  for (unsigned i = 0; i < period; ++i) {
+    lcd.print("\4\4\3");
+  }
+  for (unsigned i = period; i < len; ++i) {
+    lcd.print("\3\3\3");
+  }
+  for (unsigned i = len; i < MAX_PERIOD; ++i) {
+    lcd.print("   ");
+  }
+  lcd.setCursor(14, 1);
+  lcd.print(" "); // clear trailing \3
+  lcd.print(period ? period : len);
+}
+
 void setup()
 {
   Serial.begin ( 57600 );
@@ -54,6 +93,8 @@ void setup()
   // lcd.createChar (0, smiley);    // load character to the LCD
   // lcd.createChar (1, armsUp);    // load character to the LCD
   // lcd.createChar (2, frownie);   // load character to the LCD
+  lcd.createChar (3, newbar);
+  lcd.createChar (4, fullbar);
 
   lcd.home();                   // go home
   lcd.print("FridgeFood timer");
@@ -74,24 +115,23 @@ void loop()
   
   if (period != prevPeriod) {
     digitalWrite(VIBRO_PIN, HIGH);
-    delay(100);
+    delay(133);
     digitalWrite(VIBRO_PIN, LOW);
   }
 
-  lcd.setCursor(0, 1);
-  lcd.print("     ");
-  lcd.setCursor(0, 1);
-  lcd.print(period); // 1 .. 5
+  // lcd.setCursor(0, 1);
+  // lcd.print("     ");
+  // lcd.setCursor(0, 1);
+  // lcd.print(period); // 1 .. 5
+
+  // lcd.setCursor(0,1);
+  // lcd.print("\4\4\3\4\4\3\4\4\3\4\4\3\4\4 ");
+  // lcd.print(period);
+  // printScale(period, scaleLen);
+  // lcd.print(period);
+  printScale(0, period);
 
   prevPeriod = period;
 
   delay(200);
-
-  // // Do a little animation by writing to the same location
-  // lcd.setCursor ( 14, 1 );
-  // lcd.print (char(2));
-  // delay (200);
-  // lcd.setCursor ( 14, 1 );
-  // lcd.print ( char(0));
-  // delay (200);
 }
