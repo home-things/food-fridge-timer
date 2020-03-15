@@ -1,5 +1,6 @@
 #include <Arduino.h>
 #include <LiquidCrystal.h>
+#include <string.h>
 
 //                rs  en  d0 d1 d2 d3
 LiquidCrystal lcd(12, 13, 4, 5, 6, 7);
@@ -7,7 +8,8 @@ LiquidCrystal lcd(12, 13, 4, 5, 6, 7);
 //
 // pins
 #define PERIOD_PIN A1
-#define VIBRO_PIN 9
+#define VIBRO_PIN  9
+#define BUTTON_PIN 2
 
 //
 // consts
@@ -15,7 +17,24 @@ LiquidCrystal lcd(12, 13, 4, 5, 6, 7);
 
 unsigned prevPeriod = 0;
 unsigned minPeriod = 2, periodSteps = 4; // 1, 2, 3, 4, 5
-unsigned scaleLen = 5;
+unsigned period; // scaleLen
+
+enum STATE {
+  WELCOME,
+  INITIAL,
+  SETTING,
+  PENDING,
+  WASTED
+};
+auto state = WELCOME;
+
+char label[5][17] = {
+  "   loading...",
+  "FridgeFood Guard",   // 2: Setup timer [ok]
+  " Turn  wheel \5\6 ", // 2: Exp time, days
+  " Timer  pending ",   // 2: Days left // Eat me, pls
+  "PO  TRA  CHE  NO"
+};
 
 //
 // sumbols
@@ -66,72 +85,111 @@ byte frownie[8] = {
   0b10001
 };
 
-void printScale (unsigned period, unsigned len) {
+byte topRoundArrow[8] = 
+{
+	0b11111,
+	0b00001,
+	0b01101,
+	0b11101,
+	0b11001,
+	0b10000,
+	0b10000,
+	0b10000,
+};
+
+byte bottomRoundArrow[8] = 
+{
+	0b00001,
+	0b00001,
+	0b00001,
+	0b10011,
+	0b10111,
+	0b10110,
+	0b10000,
+	0b11111,
+};
+
+void printScale (unsigned day, unsigned period) {
   lcd.setCursor(0, 1);
-  for (unsigned i = 0; i < period; ++i) {
+  for (unsigned i = 0; i < day; ++i) {
     lcd.print("\4\4\3");
   }
-  for (unsigned i = period; i < len; ++i) {
+  for (unsigned i = day; i < period; ++i) {
     lcd.print("\3\3\3");
   }
-  for (unsigned i = len; i < MAX_PERIOD; ++i) {
+  for (unsigned i = period; i < MAX_PERIOD; ++i) {
     lcd.print("   ");
   }
   lcd.setCursor(14, 1);
   lcd.print(" "); // clear trailing \3
-  lcd.print(period ? period : len);
+}
+
+void handlePress () {
+  if (state == WASTED || state == PENDING) {
+    state = INITIAL;
+  } else {
+    state = (STATE)(state + 1);
+  }
 }
 
 void setup()
 {
-  Serial.begin ( 57600 );
+  Serial.begin (57600);
+
   pinMode(PERIOD_PIN, INPUT);
   pinMode(VIBRO_PIN, OUTPUT);
+  pinMode(BUTTON_PIN, INPUT_PULLUP);
 
-  lcd.begin(16,2);               // initialize the lcd
+  lcd.begin(16,2);
+  lcd.home();
 
-  // lcd.createChar (0, smiley);    // load character to the LCD
-  // lcd.createChar (1, armsUp);    // load character to the LCD
-  // lcd.createChar (2, frownie);   // load character to the LCD
   lcd.createChar (3, newbar);
   lcd.createChar (4, fullbar);
+  lcd.createChar (5, topRoundArrow);
+  lcd.createChar (6, bottomRoundArrow);
 
-  lcd.home();                   // go home
-  lcd.print("FridgeFood timer");
-  lcd.setCursor ( 0, 1 );        // go to the next line
-  // lcd.print ("  press  start  ");
-  lcd.setCursor ( 0, 1 );        // go to the next line
-  // lcd.cursor();
-  // lcd.blink();
-
+  attachInterrupt(digitalPinToInterrupt(BUTTON_PIN), handlePress, FALLING);
 }
 
 void loop()
 {
-  unsigned raw = 0;
-  raw = analogRead(PERIOD_PIN); // 0 .. 1023 
-  
-  unsigned period = minPeriod + periodSteps * (1 - ((1 + raw) / 1024.0));
-  
-  if (period != prevPeriod) {
-    digitalWrite(VIBRO_PIN, HIGH);
-    delay(133);
-    digitalWrite(VIBRO_PIN, LOW);
-  }
+  lcd.setCursor(0, 0);
+  lcd.print(label[state]);
 
-  // lcd.setCursor(0, 1);
-  // lcd.print("     ");
-  // lcd.setCursor(0, 1);
-  // lcd.print(period); // 1 .. 5
+  do switch (state) {
+    case INITIAL: {
+      lcd.setCursor(0, 1);
+      lcd.print("Setup timer [ok]");
+      break;
+    }
+    case SETTING: {
+      unsigned raw = 0;
+      raw = analogRead(PERIOD_PIN); // 0 .. 1023 
+      
+      period = minPeriod + periodSteps * (1 - ((1 + raw) / 1024.0));
+      
+      if (period != prevPeriod) {
+        digitalWrite(VIBRO_PIN, HIGH);
+        delay(133);
+        digitalWrite(VIBRO_PIN, LOW);
+      }
+      printScale(0, period);
+      lcd.print(period);
 
-  // lcd.setCursor(0,1);
-  // lcd.print("\4\4\3\4\4\3\4\4\3\4\4\3\4\4 ");
-  // lcd.print(period);
-  // printScale(period, scaleLen);
-  // lcd.print(period);
-  printScale(0, period);
+      prevPeriod = period;
+      break;
+    }
+    case PENDING: {
+      unsigned day = 0;
+      printScale(day, period);
+      lcd.print(day);
 
-  prevPeriod = period;
+      break;
+    }
+    case WASTED: {
+      break;
+    }
+  } while (false);
 
   delay(200);
 }
